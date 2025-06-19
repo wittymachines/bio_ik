@@ -256,6 +256,85 @@ double Problem::computeGoalFitness(std::vector<GoalInfo>& goals, const Frame* ti
     return sum;
 }
 
+
+void Problem::getPoseError(const std::vector<Frame>& tip_frames, const double* active_variable_positions, int thread_num){
+    for(auto& goal : goals)
+    {
+        const auto& fa = goal.frame;
+        const auto& fb = tip_frames[goal.tip_index];
+
+        switch(goal.goal_type)
+        {
+
+            case GoalType::Position:
+            {
+                if(dpos != DBL_MAX)
+                {
+                    double p_dist = (fb.pos - fa.pos).length();
+                    if(!(p_dist <= dpos)) LOG("Position error too high:", p_dist, dpos);
+                }
+                if(dtwist != DBL_MAX)
+                {
+                    KDL::Frame fk_kdl, ik_kdl;
+                    frameToKDL(fa, fk_kdl);
+                    frameToKDL(fb, ik_kdl);
+                    KDL::Twist kdl_diff(fk_kdl.M.Inverse() * KDL::diff(fk_kdl.p, ik_kdl.p), fk_kdl.M.Inverse() * KDL::diff(fk_kdl.M, ik_kdl.M));
+                    if(!KDL::Equal(kdl_diff.vel, KDL::Twist::Zero().vel, dtwist)) LOG("Velocity error too high");
+                }
+                continue;
+            }
+
+            case GoalType::Orientation:
+            {
+                if(drot != DBL_MAX)
+                {
+                    double r_dist = fb.rot.angleShortestPath(fa.rot);
+                    r_dist = r_dist * 180 / M_PI;
+                    if(!(r_dist <= drot)) LOG("Orientation error too high:", std::to_string(r_dist).c_str(), std::to_string(drot).c_str());
+                }
+                if(dtwist != DBL_MAX)
+                {
+                    KDL::Frame fk_kdl, ik_kdl;
+                    frameToKDL(fa, fk_kdl);
+                    frameToKDL(fb, ik_kdl);
+                    KDL::Twist kdl_diff(fk_kdl.M.Inverse() * KDL::diff(fk_kdl.p, ik_kdl.p), fk_kdl.M.Inverse() * KDL::diff(fk_kdl.M, ik_kdl.M));
+                    if(!KDL::Equal(kdl_diff.rot, KDL::Twist::Zero().rot, dtwist)) LOG("Orientation error too high \n");
+                }
+                continue;
+            }
+
+            case GoalType::Pose:
+            {
+                if(dpos != DBL_MAX || drot != DBL_MAX)
+                {
+                    double p_dist = (fb.pos - fa.pos).length();
+                    double r_dist = fb.rot.angleShortestPath(fa.rot);
+                    r_dist = r_dist * 180 / M_PI;
+                    if(!(p_dist <= dpos)) LOG(std::string("Thread ").append(std::to_string(thread_num)).append(" - Position error too high. Current error: ").append(std::to_string(p_dist)).append(", Tolerance: ").append(std::to_string(dpos)).append("\n"));
+                    if(!(r_dist <= drot)) LOG(std::string("Thread ").append(std::to_string(thread_num)).append(" - Orientation error too high. Current error: ").append(std::to_string(r_dist)).append(", Tolerance: ").append(std::to_string(drot)).append("\n"));
+                    if(!(p_dist <= dpos) || !(r_dist <= drot))
+                    {
+                        return;
+                    }
+                }
+                if(dtwist != DBL_MAX)
+                {
+                    KDL::Frame fk_kdl, ik_kdl;
+                    frameToKDL(fa, fk_kdl);
+                    frameToKDL(fb, ik_kdl);
+                    KDL::Twist kdl_diff(fk_kdl.M.Inverse() * KDL::diff(fk_kdl.p, ik_kdl.p), fk_kdl.M.Inverse() * KDL::diff(fk_kdl.M, ik_kdl.M));
+                    if(!KDL::Equal(kdl_diff, KDL::Twist::Zero(), dtwist)){
+                        LOG(std::string("Thread ").append(std::to_string(thread_num)).append(" - Twist error too high. Current error: vel[").append(std::to_string(kdl_diff.vel.x())).append(",").append(std::to_string(kdl_diff.vel.y())).append(",").append(std::to_string(kdl_diff.vel.z())).append("] rot[").append(std::to_string(kdl_diff.rot.x())).append(",").append(std::to_string(kdl_diff.rot.y())).append(",").append(std::to_string(kdl_diff.rot.z())).append("] Tolerance: ").append(std::to_string(dtwist)).append("\n"));
+                        return;
+                    }
+                }
+                continue;
+            }
+        }
+    }
+}
+
+
 bool Problem::checkSolutionActiveVariables(const std::vector<Frame>& tip_frames, const double* active_variable_positions)
 {
     for(auto& goal : goals)

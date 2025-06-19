@@ -171,7 +171,7 @@ struct BioIKKinematicsPlugin : kinematics::KinematicsBase {
   bool load(std::string group_name) {
     LOG_FNC();
 
-    LOG("bio ik init", node_->getName());
+    LOG("bio ik init", node_->get_name());
 
     joint_model_group = robot_model_->getJointModelGroup(group_name);
     if (!joint_model_group) {
@@ -596,6 +596,7 @@ struct BioIKKinematicsPlugin : kinematics::KinematicsBase {
     } else {
       // return success
       error_code.val = error_code.SUCCESS;
+
       return true;
     }
   }
