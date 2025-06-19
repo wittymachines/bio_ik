@@ -166,6 +166,7 @@ private:
             iteration_count++;
             for(int it2 = 1; it2 < 4; it2++)
                 if(std::chrono::system_clock::now() < timeout && finished == 0) solvers[i]->step();
+                
 
             if(finished) break;
 
@@ -183,6 +184,14 @@ private:
             if(success) break;
         }
 
+        if (std::chrono::system_clock::now() >= timeout) {
+            LOG("Thread " + std::to_string(i) + " IK timeout \n");   
+            auto& result = solver_temps[i];
+            auto& fk = solvers[i]->model;
+            fk.applyConfiguration(result);
+            LOG("Current error log: \n");
+            solvers[i]->computePoseError(result, fk.getTipFrames(), i);     
+        }            
         finished = 1;
 
         for(auto& s : solvers)

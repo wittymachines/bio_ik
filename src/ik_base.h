@@ -206,6 +206,7 @@ struct IKBase : Random
         return computeFitness(variable_positions, model.getTipFrames());
     }
 
+    void computePoseError(const std::vector<double>& variable_positions, const std::vector<Frame>& tips, int thread_num=0) {return problem.getPoseError(tips, extractActiveVariables(variable_positions), thread_num); }
     virtual size_t concurrency() const { return 1; }
 };
 

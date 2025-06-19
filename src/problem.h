@@ -140,5 +140,6 @@ public:
     double computeGoalFitness(GoalInfo& goal, const Frame* tip_frames, const double* active_variable_positions);
     double computeGoalFitness(std::vector<GoalInfo>& goals, const Frame* tip_frames, const double* active_variable_positions);
     bool checkSolutionActiveVariables(const std::vector<Frame>& tip_frames, const double* active_variable_positions);
+    void getPoseError(const std::vector<Frame>& tip_frames, const double* active_variable_positions, int thread_num=0);
 };
 }

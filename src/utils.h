@@ -80,7 +80,7 @@ struct IKParams
 };
 
 // Uncomment to enable logging
-//#define ENABLE_LOG
+#define ENABLE_LOG
 
 // Uncomment to enable profiling
 //#define ENABLE_PROFILER
