@@ -14,20 +14,18 @@ in terms of success rate, precision and efficiency, and is actually usable for p
 
 ## Installation and Setup
 
-You will need ROS version Indigo or newer (wiki.ros.org).
-The software was developed on Ubuntu Linux 16.04 LTS with ROS Kinetic,
-but has also been tested on Ubuntu Linux 14.04 LTS with ROS Indigo.
-Newer versions of ROS should work, but may need some adaptation.
+You will need ROS 2 version Rolling or newer: [https://docs.ros.org/en/rolling/Installation.html](https://docs.ros.org/en/rolling/Installation.html).
+This version of the software was developed on Ubuntu Linux 22.04 LTS with ROS 2 Rolling.
+Newer versions of ROS 2 should work, but may need some adaptation.
 See below for version specific instructions.
 
-* Download the `bio_ik` package and unpack into your catkin workspace.
-* Run `catkin_make` to compile your workspace:
+* Download the `bio_ik` package and unpack into your colcon workspace.
+* Run `colcon build --mixin release` to compile your workspace:
   ```
-    roscd
-    cd src
-    git clone https://github.com/TAMS-Group/bio_ik.git
-    roscd
-    catkin_make
+    cd <PATH TO WORKSPACE>/src
+    git clone -b ros2 https://github.com/TAMS-Group/bio_ik.git
+    cd ..
+    colcon build --mixin release
   ```
 
 * Configure Moveit to use bio_ik as the kinematics solver (see next section).
@@ -64,7 +62,7 @@ or used interactively from rviz using the MotionPlanning GUI plugin.
 * Run the moveit setup assistant to create the Moveit configuration files:
 
   ```
-  rosrun moveit_setup_assistant moveit_setup_assistant
+  ros2 run moveit_setup_assistant moveit_setup_assistant
 
   ```
 *  The setup assistant automatically searches for all available IK solver plugins
@@ -84,47 +82,74 @@ or used interactively from rviz using the MotionPlanning GUI plugin.
     # example kinematics.yaml for the PR2 robot
     right_arm:
       # kinematics_solver: kdl_kinematics_plugin/KDLKinematicsPlugin
-      # kinematics_solver_attempts: 1
+      # kinematics_solver_attempts: 1.0
       kinematics_solver: bio_ik/BioIKKinematicsPlugin
       kinematics_solver_search_resolution: 0.005
       kinematics_solver_timeout: 0.005
-      kinematics_solver_attempts: 1
+      kinematics_solver_attempts: 1.0
     left_arm:
       kinematics_solver: bio_ik/BioIKKinematicsPlugin
       kinematics_solver_search_resolution: 0.005
       kinematics_solver_timeout: 0.005
-      kinematics_solver_attempts: 1
+      kinematics_solver_attempts: 1.0
     all:
       kinematics_solver: bio_ik/BioIKKinematicsPlugin
       kinematics_solver_search_resolution: 0.005
       kinematics_solver_timeout: 0.02
-      kinematics_solver_attempts: 1
+      kinematics_solver_attempts: 1.0
 
     # optional bio_ik configuration parameters
-    #  center_joints_weight: 1
-    #  minimal_displacement_weight: 1
-    #  avoid_joint_limits_weight: 1
+    #  center_joints_weight: 1.0
+    #  minimal_displacement_weight: 1.0
+    #  avoid_joint_limits_weight: 1.0
   ```
 
 
-* For a first test, run the Moveit-created demo launch. Once rviz is running,
-  enable the motion planning plugin, then select one of the end effectors
-  of you robot. Rviz should show an 6-D (position and orientation)
-  interactive marker for the selected end-effector(s).
-  Move the interactive marker and watch bio_ik calculating poses for your robot.
+* For a first test, follow the [Quickstart in Rviz](https://moveit.picknik.ai/rolling/doc/tutorials/quickstart_in_rviz/quickstart_in_rviz_tutorial.html)
+  MoveIt2 tutorial. Before building your workspace, be sure to replace the kinematics solver for the Panda robot in
+  `<colcon workspace>/src/moveit_resources/panda_moveit_config/config/kinematics.yaml` as shown below:
 
-  If you also installed the bio_ik demo (see below), you should be able
-  to run one of the predefined demos:
+
+  ```yaml
+  panda_arm:
+    kinematics_solver: bio_ik/BioIKKinematicsPlugin
+    kinematics_solver_search_resolution: 0.005
+    kinematics_solver_timeout: 0.005
+    kinematics_solver_attempts: 1.0
   ```
-    roslaunch pr2_bioik_moveit demo.launch
-    roslaunch pr2_bioik_moveit valve.launch
-    roslaunch pr2_bioik_moveit dance.launch
+
+  To use a solver class besides the default `bio2_memetic`, the ROS param `robot_description_kinematics.panda_arm.mode` must be set to one
+  of the options [below](#disabling-global-optimization) (e.g. 'gd_c'). For a different robot, replace `panda_arm` in the parameter with your robot's group name.
+  To make this change for the Quickstart in Rviz tutorial, edit the rviz node within `<colcon workspace>/src/moveit2_tutorials/doc/tutorials/quickstart_in_rviz/launch/demo.launch.py` as such:
+
+  ```python
+  rviz_node_tutorial = Node(
+    package="rviz2",
+    executable="rviz2",
+    name="rviz2",
+    output="log",
+    arguments=["-d", rviz_empty_config],
+    parameters=[
+        robot_description,
+        robot_description_semantic,
+        ompl_planning_pipeline_config,
+        kinematics_yaml,
+        {"robot_description_kinematics.panda_arm.mode": "gd_c"} # use gd_c solver instead of default "bio2_memetic"
+    ],
+    condition=IfCondition(tutorial_mode),
+  )
   ```
+
+  Once you make this change, remember to rebuild your workspace.
+
+  After enabling the Motion Planning Plugin in Rviz, check the "Approx IK Solutions" box before attempting to move the arm.
+
 
 * You are now ready to use bio_ik from your C/C++ and Python programs,
   using the standard Moveit API.
   To explicitly request an IK solution in C++:
-  ```
+
+  ```c++
     robot_model_loader::RobotModelLoader robot_model_loader(robot);
 
     auto robot_model = robot_model_loader.getModel();
@@ -136,15 +161,16 @@ or used interactively from rviz using the MotionPlanning GUI plugin.
 
     robot_state::RobotState robot_state_ik(robot_model);
 
-    // traditional "basic" bio_ik usage. The end-effector goal poses
-    // and end-effector link names are passed into the setFromIK()
-    // call. The KinematicsQueryOptions are empty.
-    //
+    const geometry_msgs::msg::Pose pose;
+
+    // Several overloads for setFromIK are available
+    // here, we plass the joint model group, desired pose, and a timeout.
+    // We can leave the callback and options empty.
+    // Several desired poses can be passed with a separate overload
     bool ok = robot_state_ik.setFromIK(
                 joint_model_group, // joints to be used for IK
-                tip_transforms,    // multiple end-effector goal poses
-                tip_names,         // names of the end-effector links
-                attempts, timeout, // solver attempts and timeout
+                pose,    // end-effector goal pose
+                timeout, // solver attempts and timeout
                 moveit::core::GroupStateValidityCallbackFn(),
                 opts               // mostly empty
               );
@@ -169,10 +195,45 @@ individual *goals*.
 The algorithm then tries to find a robot configuration
 that fulfills all given goals simultaneously by minimizing
 a quadratic error function built from the weighted individual goals.
-While the current Moveit API does not support multiple-goals tasks directly,
-it provides the KinematicQueryOptions class.
-Therefore, bio_ik simply provides a set of predefined motion goals,
-and a combination of the user-specified goals is passed via Moveit to the IK solver.
+While the current Moveit API does not support specifying the various derivations of bio_ik's `Goal` type directly (doing so would require creating a circular dependency),
+one may specify an instance of [`kinematics::KinematicsBase::IKCostFn`](https://github.com/ros-planning/moveit2/blob/1d67b519e6ef9ca1ebba494743791da998b72950/moveit_core/kinematics_base/include/moveit/kinematics_base/kinematics_base.h#L158) when querying for IK solutions. 
+In bio_ik, this cost function gets converted to a `IKCostFnGoal` type when the proper overload of `searchPositionIK` is called. 
+This is supported by MoveIt's `KinematicsBase::searchPositionIK` directly, `RobotState::setFromIK`, `CartesianInterpolator::computeCartesianPath`, and even MoveIt Task Constructor's `CartesianPath` solver. 
+It is the responsibility of the `IKCostFn` to provide its own weighting. 
+The cost function should return lower values when closer to the desired goal. 
+One may use a single `IKCostFn` to implement weighting of multiple custom goals. 
+Note that such a cost function goal will not eliminate the goal created for a pose passed to each IK call. 
+See below for an example of an `IKCostFn` instance that prioritizes the Yoshikawa manipulability of the robot. 
+Note that such a goal will create a trade-off between position accuracy and manipulability that may be tuned via the weighting.
+
+```c++
+  // empty, so it will be ignored
+  moveit::core::GroupStateValidityCallbackFn callback_fn;
+  // Jacobian -> Yoshikawa manipulability
+  const auto getManipulability = [](Eigen::MatrixXd jacobian) {
+    return sqrt((jacobian * jacobian.transpose()).determinant());
+  };
+  // the manipulability is usually < 0.1, so weighting usually needs to be pretty low here.
+  const double sing_weight = 0.00001;
+  const kinematics::KinematicsBase::IKCostFn sing_avoid_cost = [&sing_weight, &getManipulability](const geometry_msgs::msg::Pose& /*goal_pose*/,
+                                                                  const moveit::core::RobotState& solution_state,
+                                                                  moveit::core::JointModelGroup* jmg,
+                                                                  const std::vector<double>& seed_state) {
+    auto jac = solution_state.getJacobian(jmg);
+    // associate low manipulability with high cost
+    return sing_weight / getManipulability(jac);
+  };
+  kinematics::KinematicsQueryOptions opts;
+  opts.return_approximate_solution = true;
+  // when using an instance of IKCostFn, you may need to increase the timeout from the default specified in kinematics.yaml
+  // target_pose should be a real pose that we wish to achieve, and not empty as is shown in future examples.
+  current_state->setFromIK(joint_model_group, target_pose, 0.05, callback_fn, opts, sing_avoid_cost);
+```
+
+Alternatively, one may specify multiple goals via the `BioIKKinematicsQueryOptions`, which inherits from 
+MoveIt's `KinematicsQueryOptions`. Note that the recommended way to specify goals is in the form of an `IKCostFn`.
+bio_ik provides a set of predefined motion goals,
+and a combination of the user-specified goals may be passed to the IK solver.
 No API changes are required in Moveit, but using the IK solver now consists
 passing the weighted goals via the KinematicQueryOptions.
 The predefined goals include:
@@ -197,7 +258,7 @@ a suitable combination of individual goals.
 In the following example, we want to grasp and then _slowly turn
 a valve wheel_ with the left and right gripers of the PR2 robot:
 
-  ```
+  ```c++
     bio_ik::BioIKKinematicsQueryOptions ik_options;
     ik_options.replace = true;
     ik_options.return_approximate_solution = true;
@@ -225,7 +286,7 @@ by adding the MinimalDisplacementGoal.
 Fourth, we want to avoid torso lift motions, which are very slow on the PR2.
 All of this is specified easily:
 
- ```
+ ```c++
     auto* lookat_goal = new bio_ik::LookAtGoal();
     lookat_goal->setLinkName("sensor_mount_link");
     ik_options.goals.emplace_back(lookat_goal);
@@ -239,15 +300,15 @@ All of this is specified easily:
     auto* torso_goal = new bio_ik::PositionGoal();
     torso_goal->setLinkName("torso_lift_link");
     torso_goal->setWeight(1);
-    torso_goal->setPosition(tf::Vector3( -0.05, 0, 1.0 ));
+    torso_goal->setPosition(tf2::Vector3( -0.05, 0, 1.0 ));
     ik_options.goals.emplace_back(torso_goal);
   ```
 
 For the actual turning motion, we calculate a set of required gripper
 poses in a loop:
-  ```
+  ```c++
     for(int i = 0; ; i++) {
-        tf::Vector3 center(0.7, 0, 1);
+        tf2::Vector3 center(0.7, 0, 1);
 
         double t = i * 0.1;
         double r = 0.1;
@@ -256,9 +317,9 @@ poses in a loop:
         double dy = cos(a) * r;
         double dz = sin(a) * r;
 
-        tf::Vector3 dl(dx, +dy, +dz);
-        tf::Vector3 dr(dx, -dy, -dz);
-        tf::Vector3 dg = tf::Vector3(0, cos(a), sin(a)) * (0.025 + fmin(0.025, fmax(0.0, cos(t) * 0.1)));
+        tf2::Vector3 dl(dx, +dy, +dz);
+        tf2::Vector3 dr(dx, -dy, -dz);
+        tf2::Vector3 dg = tf2::Vector3(0, cos(a), sin(a)) * (0.025 + fmin(0.025, fmax(0.0, cos(t) * 0.1)));
 
         ll_goal->setPosition(center + dl + dg);
         lr_goal->setPosition(center + dl - dg);
@@ -266,12 +327,12 @@ poses in a loop:
         rr_goal->setPosition(center + dr - dg);
 
         double ro = 0;
-        ll_goal->setOrientation(tf::Quaternion(tf::Vector3(1, 0, 0), a + ro));
-        lr_goal->setOrientation(tf::Quaternion(tf::Vector3(1, 0, 0), a + ro));
-        rl_goal->setOrientation(tf::Quaternion(tf::Vector3(1, 0, 0), a + ro));
-        rr_goal->setOrientation(tf::Quaternion(tf::Vector3(1, 0, 0), a + ro));
+        ll_goal->setOrientation(tf2::Quaternion(tf2::Vector3(1, 0, 0), a + ro));
+        lr_goal->setOrientation(tf2::Quaternion(tf2::Vector3(1, 0, 0), a + ro));
+        rl_goal->setOrientation(tf2::Quaternion(tf2::Vector3(1, 0, 0), a + ro));
+        rr_goal->setOrientation(tf2::Quaternion(tf2::Vector3(1, 0, 0), a + ro));
 
-        lookat_goal->setAxis(tf::Vector3(1, 0, 0));
+        lookat_goal->setAxis(tf2::Vector3(1, 0, 0));
         lookat_goal->setTarget(rr_goal->getPosition());
 
         // "advanced" bio_ik usage. The call parameters for the end-effector
@@ -279,12 +340,12 @@ poses in a loop:
         // requested goals and weights are passed via the ik_options object.
         //
         robot_state.setFromIK(
-                      joint_model_group,           // active PR2 joints
-                      EigenSTL::vector_Affine3d(), // no explicit poses here
-                      std::vector<std::string>(),  // no end effector links here
-                      0, 0.0,                      // take values from YAML file
+                      joint_model_group,             // active PR2 joints
+                      EigenSTL::vector_Isometry3d(), // no explicit poses here
+                      std::vector<std::string>(),    // no end effector links here
+                      0.0,                           // take value from YAML file
                       moveit::core::GroupStateValidityCallbackFn(),
-                      ik_options       // four gripper goals and secondary goals
+                      ik_options                     // four gripper goals and secondary goals
                     );
 
         ... // check solution validity and actually move the robot
@@ -312,12 +373,12 @@ By default, BioIK uses a memetic global optimizer (`bio2_memetic`).
 A different solver class can be selected by setting the `mode` parameter in the `kinematics.yaml` file of your MoveIt robot configuration.
 
 Example:
-```
+```yaml
 all:
   kinematics_solver: bio_ik/BioIKKinematicsPlugin
   kinematics_solver_search_resolution: 0.005
   kinematics_solver_timeout: 0.02
-  kinematics_solver_attempts: 1
+  kinematics_solver_attempts: 1.0
   mode: gd_c
 ```
 
@@ -401,7 +462,7 @@ resulting in good search-space exploration.
 See [3] and [4] for more details. See [5] and [6] for an in-depth explanation of an 
 earlier evolutionary algorithm for animating video game characters.
 
-## Running the Self-Tests
+## Running the Self-Tests [NOT AVAILABLE IN ROS2]
 
 We have tested bio_ik on many different robot arms,
 both using the tranditional single end-effector API
@@ -430,7 +491,7 @@ simulator (if you installed Gazebo).
 
 Simply clone the PR2 description package (inside `pr2_common`)
 and the `pr2_bioik_moveit` package into your catkin workspace:
-  ```
+  ```bash
     roscd
     cd src
     git clone https://github.com/PR2/pr2_common.git
@@ -438,7 +499,7 @@ and the `pr2_bioik_moveit` package into your catkin workspace:
     catkin_make
   ```
 
-For the FK-IK-FK performance test, please run
+**This is not yet supported in ROS 2**. For the FK-IK-FK performance test, please run
 
   ```
   roslaunch pr2_bioik_moveit env_pr2.launch

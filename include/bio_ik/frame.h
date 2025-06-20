@@ -39,8 +39,8 @@
 #include <Eigen/Dense>
 #include <tf2/LinearMath/Vector3.h>
 #include <tf2/LinearMath/Quaternion.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <tf2_kdl/tf2_kdl.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_kdl/tf2_kdl.hpp>
 
 namespace bio_ik
 {
@@ -48,7 +48,7 @@ namespace bio_ik
 typedef tf2::Quaternion Quaternion;
 typedef tf2::Vector3 Vector3;
 
-struct Frame
+struct alignas(32) Frame
 {
     Vector3 pos;
     double __padding[4 - (sizeof(Vector3) / sizeof(double))];
@@ -66,7 +66,7 @@ struct Frame
         kdl.M.GetQuaternion(qx, qy, qz, qw);
         rot = tf2::Quaternion(qx, qy, qz, qw);
     }
-    explicit inline Frame(const geometry_msgs::Pose& msg)
+    explicit inline Frame(const geometry_msgs::msg::Pose& msg)
     {
         tf2::fromMsg(msg.orientation, rot);
         pos = tf2::Vector3(msg.position.x, msg.position.y, msg.position.z);

@@ -128,7 +128,7 @@ public:
         Frame frame;
         GoalContext goal_context;
     };
-    double timeout;
+    std::chrono::time_point<std::chrono::system_clock, std::chrono::duration<double>> timeout;
     std::vector<double> initial_guess;
     std::vector<size_t> active_variables;
     std::vector<size_t> tip_link_indices;
@@ -140,5 +140,7 @@ public:
     double computeGoalFitness(GoalInfo& goal, const Frame* tip_frames, const double* active_variable_positions);
     double computeGoalFitness(std::vector<GoalInfo>& goals, const Frame* tip_frames, const double* active_variable_positions);
     bool checkSolutionActiveVariables(const std::vector<Frame>& tip_frames, const double* active_variable_positions);
+    void getPoseError(const std::vector<Frame>& tip_frames, const double* active_variable_positions, int thread_num=0);
 };
+
 }
