@@ -142,4 +142,5 @@ public:
     bool checkSolutionActiveVariables(const std::vector<Frame>& tip_frames, const double* active_variable_positions);
     void getPoseError(const std::vector<Frame>& tip_frames, const double* active_variable_positions, int thread_num=0);
 };
+
 }
