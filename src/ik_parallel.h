@@ -184,12 +184,22 @@ private:
             if(success) break;
         }
 
-        if (std::chrono::system_clock::now() >= timeout) {
-            LOG("Thread " + std::to_string(i) + " IK timeout \n");   
+        if (std::chrono::system_clock::now() >= timeout && finished == 0) {
             auto& result = solver_temps[i];
+            result = solvers[i]->getSolution();
+            
+            std::string result_str = "Thread " + std::to_string(i) + " timeout, current result: [";
+            double* vars_ptr = solvers[i]->extractActiveVariables(result);
+            std::vector<double> active_vars(vars_ptr, vars_ptr + result.size());
+            for(size_t j = 0; j < active_vars.size()-1; j++)
+            {
+                result_str += std::to_string(active_vars[j]) + ", ";
+            }
+            result_str += std::to_string(result.back());
+            result_str += "]";
+            LOG(result_str);
             auto& fk = solvers[i]->model;
             fk.applyConfiguration(result);
-            LOG("Current error log: \n");
             solvers[i]->computePoseError(result, fk.getTipFrames(), i);     
         }            
         finished = 1;
